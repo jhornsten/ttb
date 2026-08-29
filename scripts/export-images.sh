@@ -43,22 +43,24 @@ Torrent Test Bench (TTB) — prebuilt shared-catalog swarm
 =======================================================
 
 1. docker load -i images.tar
-2. Pull trackers + flood runtime images if needed:
+2. Pull runtime images if needed:
      docker pull wiltonsr/opentracker:open
-     docker pull jesec/rtorrent:latest
-     docker pull jesec/flood:latest
-3. ./scripts/up.sh transmission deluge qbittorrent flood
+     docker pull jesec/rtorrent:latest   # only if using flood
+     docker pull jesec/flood:latest      # only if using flood
+3. ./scripts/up.sh transmission deluge qbittorrent
+   (add "flood" if desired)
 
-Endpoints:
+Endpoints (defaults):
   Transmission  http://127.0.0.1:9091   ttb / ttb
   Deluge        http://127.0.0.1:8112   password ttb
   qBittorrent   http://127.0.0.1:8080   ttb / ttb
   Flood         http://127.0.0.1:3000   create account on first visit
 
 Download batch (after seeder is up):
-  ./scripts/download-batch.sh --client deluge --count 50
+  ./scripts/download-batch.sh --client transmission --count 50
 
-Wipe client config volumes when loading a new catalog image.
+Wipe client/seeder config volumes when loading a new catalog image.
+Lab-only credentials; keep bound to localhost.
 EOF
 
 echo "Packing ${OUT}…"

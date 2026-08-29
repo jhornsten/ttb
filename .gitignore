@@ -5,3 +5,4 @@ dist/
 .seed-data/
 __pycache__/
 *.pyc
+.DS_Store
