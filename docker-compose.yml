@@ -3,7 +3,8 @@
 #   ./scripts/build.sh
 #   ./scripts/up.sh transmission deluge qbittorrent flood
 #
-# Catalog knobs (build-time): CATALOG_COUNT, TRACKER_COUNT, POPULAR_RATIO, POOL_RATIO
+# Catalog knobs (build-time): CATALOG_COUNT, TRACKER_COUNT, POPULAR_RATIO, POOL_RATIO,
+# PAYLOAD_SIZE_MIN, PAYLOAD_SIZE_MAX
 
 name: ttb
 
@@ -19,6 +20,8 @@ services:
         POPULAR_RATIO: ${POPULAR_RATIO:-0.20}
         POOL_RATIO: ${POOL_RATIO:-0.20}
         TTB_CLIENTS: ${TTB_CLIENTS:-transmission,deluge,qbittorrent,flood}
+        PAYLOAD_SIZE_MIN: ${PAYLOAD_SIZE_MIN:-1KiB}
+        PAYLOAD_SIZE_MAX: ${PAYLOAD_SIZE_MAX:-48KiB}
     image: ttb-catalog:${TAG:-local}
     container_name: ttb-catalog
     volumes:

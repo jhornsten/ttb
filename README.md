@@ -74,6 +74,9 @@ Torrents are partitioned across trackers (`http://ttb-tracker-{0..N-1}:6969/anno
 
 ```bash
 CATALOG_COUNT=5000 TRACKER_COUNT=3 ./scripts/build.sh
+
+# Larger payloads (disk/time scale with count × size):
+CATALOG_COUNT=500 PAYLOAD_SIZE_MIN=50MB PAYLOAD_SIZE_MAX=200MB ./scripts/build.sh
 ./scripts/build.sh transmission deluge   # build only some UI images
 ```
 
@@ -82,12 +85,16 @@ CATALOG_COUNT=5000 TRACKER_COUNT=3 ./scripts/build.sh
 | `CATALOG_COUNT` | `5000` | Torrents in the shared catalog |
 | `TORRENT_SEED` | `42` | Reproducible generator RNG |
 | `TRACKER_COUNT` | `3` | Announce targets (1–5); must match running trackers |
+| `PAYLOAD_SIZE_MIN` | `1KiB` | Min payload bytes per torrent (`64KiB`, `50MB`, `1GiB`, or raw bytes) |
+| `PAYLOAD_SIZE_MAX` | `48KiB` | Max payload bytes per torrent |
 | `POPULAR_RATIO` | `0.20` | Shared boot slice |
 | `POOL_RATIO` | `0.20` | Reserved for download batches |
 | `TTB_CLIENTS` | `transmission,deluge,qbittorrent,flood` | Ids used for unique-role split |
 | `TAG` | `local` | Image tag |
 
-Changing catalog size, trackers, or ratios requires a **catalog rebuild** and wiping **config volumes** so seed-once runs again against the new manifest.
+Piece length scales with payload size so `.torrent` piece lists stay reasonable. A catalog of hundreds of multi‑hundred‑MB torrents needs correspondingly large disk for `/catalog` and client download volumes.
+
+Changing catalog size, payload range, trackers, or ratios requires a **catalog rebuild** and wiping **config volumes** so seed-once runs again against the new manifest.
 
 ## Download batches
 

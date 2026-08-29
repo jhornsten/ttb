@@ -10,6 +10,8 @@ export TRACKER_COUNT="${TRACKER_COUNT:-3}"
 export POPULAR_RATIO="${POPULAR_RATIO:-0.20}"
 export POOL_RATIO="${POOL_RATIO:-0.20}"
 export TTB_CLIENTS="${TTB_CLIENTS:-transmission,deluge,qbittorrent,flood}"
+export PAYLOAD_SIZE_MIN="${PAYLOAD_SIZE_MIN:-1KiB}"
+export PAYLOAD_SIZE_MAX="${PAYLOAD_SIZE_MAX:-48KiB}"
 export TAG="${TAG:-local}"
 
 if [[ $# -eq 0 ]]; then
@@ -20,6 +22,7 @@ fi
 
 echo "Building ttb-*:${TAG}"
 echo "  CATALOG_COUNT=${CATALOG_COUNT} TRACKER_COUNT=${TRACKER_COUNT}"
+echo "  PAYLOAD_SIZE=${PAYLOAD_SIZE_MIN}..${PAYLOAD_SIZE_MAX}"
 echo "  clients=${CLIENTS[*]}"
 
 docker compose build catalog

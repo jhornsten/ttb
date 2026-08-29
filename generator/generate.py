@@ -3,6 +3,9 @@
 
 No third-party deps. Torrents are partitioned across in-bench opentracker
 instances and assigned popular / per-client-unique / pool roles.
+
+Payload size per torrent is configurable (`--size-min` / `--size-max` or
+PAYLOAD_SIZE_MIN / PAYLOAD_SIZE_MAX), e.g. 50MB..200MB for heavier benches.
 """
 
 from __future__ import annotations
@@ -72,16 +75,70 @@ def random_name(rng: random.Random, index: int, multi: bool) -> str:
     return f"{base}.{rng.choice(EXTS)}"
 
 
+def parse_size(value: str | int) -> int:
+    """Parse a byte count or human size like 64KiB, 50MB, 1G (binary units)."""
+    if isinstance(value, int):
+        return value
+    raw = value.strip().upper().replace(" ", "")
+    if not raw:
+        raise ValueError("empty size")
+    units = {
+        "B": 1,
+        "K": 1024,
+        "KB": 1024,
+        "KI": 1024,
+        "KIB": 1024,
+        "M": 1024**2,
+        "MB": 1024**2,
+        "MI": 1024**2,
+        "MIB": 1024**2,
+        "G": 1024**3,
+        "GB": 1024**3,
+        "GI": 1024**3,
+        "GIB": 1024**3,
+    }
+    for suffix in sorted(units, key=len, reverse=True):
+        if raw.endswith(suffix):
+            number = raw[: -len(suffix)]
+            return int(float(number) * units[suffix])
+    return int(raw)
+
+
+def format_bytes(n: int) -> str:
+    if n >= 1024**3 and n % (1024**3) == 0:
+        return f"{n // (1024**3)}GiB"
+    if n >= 1024**2:
+        return f"{n / (1024**2):.1f}MiB"
+    if n >= 1024:
+        return f"{n / 1024:.1f}KiB"
+    return f"{n}B"
+
+
+def choose_piece_length(total_bytes: int) -> int:
+    """Pick a power-of-two piece length so piece count stays manageable."""
+    # Target roughly 1000–2000 pieces; clamp to common BitTorrent bounds.
+    target_pieces = 1500
+    raw = max(total_bytes // target_pieces, 16 * 1024)
+    # Round up to next power of two.
+    power = 1 << (raw - 1).bit_length()
+    return min(max(power, 16 * 1024), 16 * 1024 * 1024)
+
+
 def write_random_file(path: Path, size: int, rng: random.Random) -> None:
+    """Write `size` random bytes. `rng` seeds a small header; body uses os.urandom."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Touch rng so per-torrent streams stay deterministic in call order.
+    rng.randbytes(1)
     remaining = size
+    first = True
     with path.open("wb") as fh:
         while remaining > 0:
-            chunk = min(remaining, 4096)
-            block = bytearray(rng.getrandbits(8) for _ in range(chunk))
-            if remaining == size and chunk >= 16:
+            chunk = min(remaining, 1024 * 1024)
+            block = bytearray(os.urandom(chunk))
+            if first and chunk >= 16:
                 block[0:8] = b"TTBSEED\0"
-                block[8:12] = struct.pack(">I", size)
+                block[8:16] = struct.pack(">Q", size)
+                first = False
             fh.write(block)
             remaining -= chunk
 
@@ -187,27 +244,34 @@ def generate_one(
     announce: str,
     role: str,
     tracker_index: int,
+    size_min: int,
+    size_max: int,
 ) -> dict:
     rng = rng_for(index, seed)
     multi = rng.random() < 0.35
     name = random_name(rng, index, multi)
-    piece_length = 16 * 1024
+    total_size = rng.randint(size_min, size_max)
+    piece_length = choose_piece_length(total_size)
 
     files_spec: list[tuple[list[str], Path, int]] = []
     if multi:
         n_files = rng.randint(2, 5)
+        # Split total_size across parts (at least 1 byte each).
+        weights = [rng.random() + 0.05 for _ in range(n_files)]
+        weight_sum = sum(weights)
+        sizes = [max(1, int(total_size * w / weight_sum)) for w in weights]
+        # Fix rounding so sum == total_size.
+        sizes[-1] = max(1, total_size - sum(sizes[:-1]))
         root = out_content / name
-        for i in range(n_files):
+        for i, size in enumerate(sizes):
             rel = [f"part-{i:02d}.{rng.choice(EXTS)}"]
-            size = rng.randint(512, 24_576)
             abs_path = root.joinpath(*rel)
             write_random_file(abs_path, size, rng)
             files_spec.append((rel, abs_path, size))
     else:
-        size = rng.randint(1024, 48_576)
         abs_path = out_content / name
-        write_random_file(abs_path, size, rng)
-        files_spec.append(([name], abs_path, size))
+        write_random_file(abs_path, total_size, rng)
+        files_spec.append(([name], abs_path, total_size))
 
     torrent_bytes, info_hash = build_torrent(
         name=name,
@@ -227,6 +291,7 @@ def generate_one(
         "name": name,
         "files": len(files_spec),
         "bytes": total,
+        "piece_length": piece_length,
         "torrent": torrent_name,
         "content": name,
         "infohash": info_hash,
@@ -259,6 +324,8 @@ def main() -> int:
         "TTB_CLIENTS",
         ",".join(DEFAULT_CLIENTS),
     )
+    default_size_min = os.environ.get("PAYLOAD_SIZE_MIN", "1KiB")
+    default_size_max = os.environ.get("PAYLOAD_SIZE_MAX", "48KiB")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--count", type=int, default=default_count)
     parser.add_argument("--seed", type=int, default=int(os.environ.get("TORRENT_SEED", "42")))
@@ -280,13 +347,38 @@ def main() -> int:
         default=default_clients,
         help="Comma-separated UI client ids for unique-role split",
     )
+    parser.add_argument(
+        "--size-min",
+        type=str,
+        default=default_size_min,
+        help="Min payload size per torrent (bytes or 64KiB/50MB/1GiB)",
+    )
+    parser.add_argument(
+        "--size-max",
+        type=str,
+        default=default_size_max,
+        help="Max payload size per torrent (bytes or 64KiB/50MB/1GiB)",
+    )
     args = parser.parse_args()
+
+    try:
+        size_min = parse_size(args.size_min)
+        size_max = parse_size(args.size_max)
+    except ValueError as exc:
+        print(f"invalid size: {exc}", file=sys.stderr)
+        return 2
 
     if args.count < 1:
         print("count must be >= 1", file=sys.stderr)
         return 2
     if not 1 <= args.tracker_count <= 5:
         print("tracker-count must be 1..5", file=sys.stderr)
+        return 2
+    if size_min < 16:
+        print("size-min must be >= 16 bytes (header marker)", file=sys.stderr)
+        return 2
+    if size_max < size_min:
+        print("size-max must be >= size-min", file=sys.stderr)
         return 2
     if not 0 <= args.popular_ratio <= 1 or not 0 <= args.pool_ratio <= 1:
         print("ratios must be in [0, 1]", file=sys.stderr)
@@ -311,6 +403,7 @@ def main() -> int:
 
     print(
         f"Generating {args.count} torrents (seed={args.seed}, "
+        f"size={format_bytes(size_min)}..{format_bytes(size_max)}, "
         f"trackers={args.tracker_count}, clients={clients}) → {args.out}",
         flush=True,
     )
@@ -327,6 +420,8 @@ def main() -> int:
             announce=tracker_announce(tracker_index),
             role=roles[i],
             tracker_index=tracker_index,
+            size_min=size_min,
+            size_max=size_max,
         )
         entries.append(meta)
         total_bytes += meta["bytes"]
@@ -343,6 +438,8 @@ def main() -> int:
         "count": args.count,
         "seed": args.seed,
         "bytes": total_bytes,
+        "size_min": size_min,
+        "size_max": size_max,
         "tracker_count": args.tracker_count,
         "popular_ratio": args.popular_ratio,
         "pool_ratio": args.pool_ratio,
@@ -356,13 +453,14 @@ def main() -> int:
     )
     (args.out / "manifest.txt").write_text(
         f"count={args.count}\nseed={args.seed}\nbytes={total_bytes}\n"
+        f"size_min={size_min}\nsize_max={size_max}\n"
         f"tracker_count={args.tracker_count}\nclients={','.join(clients)}\n"
         f"role_counts={json.dumps(role_counts)}\n"
         f"content={content}\ntorrents={torrents}\n",
         encoding="utf-8",
     )
     print(
-        f"Done: {args.count} torrents, {total_bytes / 1024:.1f} KiB payload, "
+        f"Done: {args.count} torrents, {format_bytes(total_bytes)} payload, "
         f"{time.time() - t0:.1f}s, roles={role_counts}",
         flush=True,
     )
