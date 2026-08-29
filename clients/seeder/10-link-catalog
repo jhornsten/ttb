@@ -1,0 +1,10 @@
+#!/command/with-contenv bash
+set -euo pipefail
+# Wait briefly for catalog volume to be published.
+for i in $(seq 1 120); do
+  if [[ -f "${CATALOG_ROOT:-/catalog}/manifest.json" ]]; then
+    break
+  fi
+  sleep 1
+done
+exec /usr/local/bin/ttb-link-slice "${TTB_CLIENT_ID:-all}" "${CATALOG_ROOT:-/catalog}" "${DOWNLOADS:-/downloads}"

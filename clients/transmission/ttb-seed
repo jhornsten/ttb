@@ -1,0 +1,4 @@
+#!/command/with-contenv bash
+# linuxserver custom service (single file under /custom-services.d/)
+set -euo pipefail
+exec /usr/local/bin/ttb-seed-once --sidecar

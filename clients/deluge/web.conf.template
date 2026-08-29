@@ -1,0 +1,18 @@
+{
+  "file": 2,
+  "format": 1
+}{
+  "base": "/",
+  "interface": "0.0.0.0",
+  "language": "",
+  "port": 8112,
+  "pwd_salt": "__PWD_SALT__",
+  "pwd_sha1": "__PWD_SHA1__",
+  "sessions": {},
+  "sidebar_show_trackers": true,
+  "sidebar_show_owners": true,
+  "show_session_speed": true,
+  "show_sidebar": true,
+  "theme": "gray",
+  "first_login": false
+}

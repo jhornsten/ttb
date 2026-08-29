@@ -1,0 +1,42 @@
+#!/command/with-contenv bash
+# Install qBittorrent defaults and bake WebUI password (QBIT_PASS, default ttb).
+set -euo pipefail
+
+CONF_DIR="/config/qBittorrent"
+CONF="${CONF_DIR}/qBittorrent.conf"
+mkdir -p "${CONF_DIR}"
+
+PASS="${QBIT_PASS:-ttb}"
+export PASS
+
+HASH_LINE="$(python3 - <<'PY'
+import base64, hashlib, os
+pw = os.environ["PASS"].encode()
+salt = os.urandom(16)
+iterations = 100_000
+key = hashlib.pbkdf2_hmac("sha512", pw, salt, iterations)
+print(
+    "@ByteArray("
+    + base64.b64encode(salt).decode()
+    + ":"
+    + str(iterations)
+    + ":"
+    + base64.b64encode(key).decode()
+    + ")"
+)
+PY
+)"
+
+if [[ ! -f "${CONF}" ]]; then
+  echo "[ttb] installing default qBittorrent.conf"
+  cp /defaults/qBittorrent.conf "${CONF}"
+fi
+
+# Ensure username + PBKDF2 password are present (idempotent-ish on first boot).
+if ! grep -q 'Password_PBKDF2' "${CONF}"; then
+  echo "[ttb] setting WebUI password hash"
+  {
+    echo "WebUI\\Username=${QBIT_USER:-ttb}"
+    echo "WebUI\\Password_PBKDF2=\"${HASH_LINE}\""
+  } >> "${CONF}"
+fi

@@ -1,0 +1,17 @@
+# rTorrent config for TTB flood profile (tracker-only discovery).
+
+directory.default.set = /downloads
+session.path.set = /config/session
+
+network.port_range.set = 6890-6890
+network.port_random.set = no
+protocol.pex.set = no
+dht.mode.set = disable
+trackers.use_udp.set = true
+
+throttle.max_uploads.set = 100
+throttle.max_downloads.set = 100
+
+system.daemon.set = true
+network.scgi.open_local = /run/rtorrent/rtorrent.sock
+schedule2 = socket_chmod, 0, 0, "execute.nothrow = chmod, \"667\", /run/rtorrent/rtorrent.sock"

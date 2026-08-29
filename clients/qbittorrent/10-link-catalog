@@ -1,0 +1,9 @@
+#!/command/with-contenv bash
+set -euo pipefail
+for i in $(seq 1 120); do
+  if [[ -f "${CATALOG_ROOT:-/catalog}/manifest.json" ]]; then
+    break
+  fi
+  sleep 1
+done
+exec /usr/local/bin/ttb-link-slice "${TTB_CLIENT_ID:-qbittorrent}" "${CATALOG_ROOT:-/catalog}" "${DOWNLOADS:-/downloads}"

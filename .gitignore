@@ -1,0 +1,7 @@
+# TTB local artifacts
+dist/
+*.tar
+*.tar.gz
+.seed-data/
+__pycache__/
+*.pyc

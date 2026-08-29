@@ -1,0 +1,248 @@
+# Prebuilt images only (after docker load). No build context required.
+
+name: ttb
+
+services:
+  catalog:
+    image: ttb-catalog:${TAG:-local}
+    container_name: ttb-catalog
+    volumes:
+      - catalog-data:/catalog
+    restart: unless-stopped
+
+  ttb-tracker-0:
+    image: ${OPENTRACKER_IMAGE:-wiltonsr/opentracker:open}
+    platform: ${OPENTRACKER_PLATFORM:-linux/amd64}
+    container_name: ttb-tracker-0
+    hostname: ttb-tracker-0
+    restart: unless-stopped
+    expose:
+      - "6969/tcp"
+      - "6969/udp"
+
+  ttb-tracker-1:
+    image: ${OPENTRACKER_IMAGE:-wiltonsr/opentracker:open}
+    platform: ${OPENTRACKER_PLATFORM:-linux/amd64}
+    container_name: ttb-tracker-1
+    hostname: ttb-tracker-1
+    restart: unless-stopped
+    expose:
+      - "6969/tcp"
+      - "6969/udp"
+
+  ttb-tracker-2:
+    image: ${OPENTRACKER_IMAGE:-wiltonsr/opentracker:open}
+    platform: ${OPENTRACKER_PLATFORM:-linux/amd64}
+    container_name: ttb-tracker-2
+    hostname: ttb-tracker-2
+    restart: unless-stopped
+    expose:
+      - "6969/tcp"
+      - "6969/udp"
+
+  ttb-tracker-3:
+    image: ${OPENTRACKER_IMAGE:-wiltonsr/opentracker:open}
+    platform: ${OPENTRACKER_PLATFORM:-linux/amd64}
+    container_name: ttb-tracker-3
+    hostname: ttb-tracker-3
+    restart: unless-stopped
+    expose:
+      - "6969/tcp"
+      - "6969/udp"
+
+  ttb-tracker-4:
+    image: ${OPENTRACKER_IMAGE:-wiltonsr/opentracker:open}
+    platform: ${OPENTRACKER_PLATFORM:-linux/amd64}
+    container_name: ttb-tracker-4
+    hostname: ttb-tracker-4
+    restart: unless-stopped
+    expose:
+      - "6969/tcp"
+      - "6969/udp"
+
+  seeder:
+    image: ttb-seeder:${TAG:-local}
+    container_name: ttb-seeder
+    hostname: ttb-seeder
+    depends_on:
+      - catalog
+      - ttb-tracker-0
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-UTC}
+      USER: ttb
+      PASS: ttb
+      PEERPORT: "51413"
+      CATALOG_ROOT: /catalog
+      TTB_CLIENT_ID: all
+    volumes:
+      - catalog-data:/catalog:ro
+      - seeder-config:/config
+      - seeder-downloads:/downloads
+    restart: unless-stopped
+
+  transmission:
+    profiles: ["transmission"]
+    image: ttb-transmission:${TAG:-local}
+    container_name: ttb-transmission
+    hostname: ttb-transmission
+    depends_on:
+      - catalog
+      - seeder
+      - ttb-tracker-0
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-UTC}
+      USER: ttb
+      PASS: ttb
+      PEERPORT: "51413"
+      CATALOG_ROOT: /catalog
+      TTB_CLIENT_ID: transmission
+    ports:
+      - "${TRANSMISSION_PORT:-9091}:9091"
+    volumes:
+      - catalog-data:/catalog:ro
+      - tx-config:/config
+      - tx-downloads:/downloads
+      - swarm-state:/state
+    restart: unless-stopped
+
+  deluge:
+    profiles: ["deluge"]
+    image: ttb-deluge:${TAG:-local}
+    container_name: ttb-deluge
+    hostname: ttb-deluge
+    depends_on:
+      - catalog
+      - seeder
+      - ttb-tracker-0
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-UTC}
+      DELUGE_PASSWORD: ttb
+      CATALOG_ROOT: /catalog
+      TTB_CLIENT_ID: deluge
+    ports:
+      - "${DELUGE_WEB_PORT:-8112}:8112"
+      - "${DELUGE_DAEMON_PORT:-58846}:58846"
+    volumes:
+      - catalog-data:/catalog:ro
+      - deluge-config:/config
+      - deluge-downloads:/downloads
+      - swarm-state:/state
+    restart: unless-stopped
+
+  qbittorrent:
+    profiles: ["qbittorrent"]
+    image: ttb-qbittorrent:${TAG:-local}
+    container_name: ttb-qbittorrent
+    hostname: ttb-qbittorrent
+    depends_on:
+      - catalog
+      - seeder
+      - ttb-tracker-0
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-UTC}
+      WEBUI_PORT: "8080"
+      TORRENTING_PORT: "6881"
+      CATALOG_ROOT: /catalog
+      TTB_CLIENT_ID: qbittorrent
+      QBIT_USER: ttb
+      QBIT_PASS: ttb
+    ports:
+      - "${QBITTORRENT_PORT:-8080}:8080"
+    volumes:
+      - catalog-data:/catalog:ro
+      - qbit-config:/config
+      - qbit-downloads:/downloads
+      - swarm-state:/state
+    restart: unless-stopped
+
+  rtorrent:
+    profiles: ["flood"]
+    image: jesec/rtorrent:latest
+    container_name: ttb-rtorrent
+    hostname: ttb-rtorrent
+    user: "${PUID:-1000}:${PGID:-1000}"
+    depends_on:
+      - catalog
+      - seeder
+      - ttb-tracker-0
+    environment:
+      HOME: /config
+    volumes:
+      - catalog-data:/catalog:ro
+      - rtorrent-config:/config
+      - rtorrent-downloads:/downloads
+      - rtorrent-socket:/run/rtorrent
+      - ./clients/flood/rtorrent.rc:/config/.rtorrent.rc:ro
+    restart: unless-stopped
+
+  flood-seed:
+    profiles: ["flood"]
+    image: ttb-flood:${TAG:-local}
+    container_name: ttb-flood-seed
+    depends_on:
+      - catalog
+      - rtorrent
+    environment:
+      CATALOG_ROOT: /catalog
+      TTB_CLIENT_ID: flood
+      DOWNLOADS: /downloads
+      CONFIG: /config
+      RTORRENT_SOCKET: /run/rtorrent/rtorrent.sock
+    volumes:
+      - catalog-data:/catalog:ro
+      - rtorrent-config:/config
+      - rtorrent-downloads:/downloads
+      - rtorrent-socket:/run/rtorrent
+      - swarm-state:/state
+    restart: unless-stopped
+
+  flood:
+    profiles: ["flood"]
+    image: jesec/flood:latest
+    container_name: ttb-flood
+    hostname: ttb-flood
+    user: "${PUID:-1000}:${PGID:-1000}"
+    depends_on:
+      - rtorrent
+    environment:
+      HOME: /config
+    command:
+      - --port
+      - "3000"
+      - --host
+      - "0.0.0.0"
+      - --allowedpath
+      - /downloads
+      - --rtorrent
+      - "scgi:///run/rtorrent/rtorrent.sock"
+    ports:
+      - "${FLOOD_PORT:-3000}:3000"
+    volumes:
+      - flood-config:/config
+      - rtorrent-downloads:/downloads
+      - rtorrent-socket:/run/rtorrent
+    restart: unless-stopped
+
+volumes:
+  catalog-data:
+  seeder-config:
+  seeder-downloads:
+  tx-config:
+  tx-downloads:
+  deluge-config:
+  deluge-downloads:
+  qbit-config:
+  qbit-downloads:
+  rtorrent-config:
+  rtorrent-downloads:
+  rtorrent-socket:
+  flood-config:
+  swarm-state:

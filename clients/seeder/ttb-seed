@@ -1,0 +1,3 @@
+#!/command/with-contenv bash
+set -euo pipefail
+exec /usr/local/bin/ttb-seed-once --sidecar
