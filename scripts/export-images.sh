@@ -54,7 +54,7 @@ Endpoints (defaults):
   Transmission  http://127.0.0.1:9091   ttb / ttb
   Deluge        http://127.0.0.1:8112   password ttb
   qBittorrent   http://127.0.0.1:8080   ttb / ttb
-  Flood         http://127.0.0.1:3000   create account on first visit
+  Flood         http://127.0.0.1:3000   no login (preconfigured rTorrent socket)
 
 Download batch (after seeder is up):
   ./scripts/download-batch.sh --client transmission --count 50
