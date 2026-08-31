@@ -25,6 +25,14 @@ echo "  CATALOG_COUNT=${CATALOG_COUNT} TRACKER_COUNT=${TRACKER_COUNT}"
 echo "  PAYLOAD_SIZE=${PAYLOAD_SIZE_MIN}..${PAYLOAD_SIZE_MAX}"
 echo "  clients=${CLIENTS[*]}"
 
+# Abort before Docker build if the catalog cannot fit (worst-case + headroom).
+python3 "$ROOT/generator/generate.py" \
+  --check-disk \
+  --count "${CATALOG_COUNT}" \
+  --size-min "${PAYLOAD_SIZE_MIN}" \
+  --size-max "${PAYLOAD_SIZE_MAX}" \
+  --out "$ROOT"
+
 docker compose build catalog
 docker compose build seeder
 
