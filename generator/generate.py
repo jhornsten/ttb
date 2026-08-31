@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import random
+import shutil
 import struct
 import sys
 import time
@@ -105,13 +106,46 @@ def parse_size(value: str | int) -> int:
 
 
 def format_bytes(n: int) -> str:
-    if n >= 1024**3 and n % (1024**3) == 0:
-        return f"{n // (1024**3)}GiB"
+    if n >= 1024**3:
+        if n % (1024**3) == 0:
+            return f"{n // (1024**3)}GiB"
+        return f"{n / (1024**3):.1f}GiB"
     if n >= 1024**2:
         return f"{n / (1024**2):.1f}MiB"
     if n >= 1024:
         return f"{n / 1024:.1f}KiB"
     return f"{n}B"
+
+
+def required_disk_bytes(count: int, size_max: int) -> int:
+    """Worst-case payload plus headroom: max(1GiB, 10% of payload)."""
+    payload = count * size_max
+    headroom = max(1024**3, payload // 10)
+    return payload + headroom
+
+
+def free_disk_bytes(path: Path) -> int:
+    check = path.resolve()
+    while not check.exists() and check != check.parent:
+        check = check.parent
+    return shutil.disk_usage(check).free
+
+
+def ensure_disk_space(path: Path, count: int, size_max: int) -> str | None:
+    """Return an error message if free space is insufficient, else None."""
+    required = required_disk_bytes(count, size_max)
+    free = free_disk_bytes(path)
+    if free >= required:
+        return None
+    payload = count * size_max
+    headroom = required - payload
+    return (
+        f"insufficient disk space for catalog build: need "
+        f"{format_bytes(required)} free "
+        f"(worst-case {format_bytes(payload)} payload + "
+        f"{format_bytes(headroom)} headroom), have {format_bytes(free)} "
+        f"on {path}"
+    )
 
 
 def choose_piece_length(total_bytes: int) -> int:
@@ -359,6 +393,11 @@ def main() -> int:
         default=default_size_max,
         help="Max payload size per torrent (bytes or 64KiB/50MB/1GiB)",
     )
+    parser.add_argument(
+        "--check-disk",
+        action="store_true",
+        help="Estimate required disk and exit without generating",
+    )
     args = parser.parse_args()
 
     try:
@@ -392,6 +431,23 @@ def main() -> int:
         print("at least one client is required", file=sys.stderr)
         return 2
 
+    required = required_disk_bytes(args.count, size_max)
+    disk_err = ensure_disk_space(args.out, args.count, size_max)
+    if args.check_disk:
+        free = free_disk_bytes(args.out)
+        print(
+            f"catalog disk check: need {format_bytes(required)}, "
+            f"have {format_bytes(free)} on {args.out.resolve()}",
+            flush=True,
+        )
+        if disk_err:
+            print(disk_err, file=sys.stderr)
+            return 1
+        return 0
+    if disk_err:
+        print(disk_err, file=sys.stderr)
+        return 1
+
     content = args.out / "content"
     torrents = args.out / "torrents"
     content.mkdir(parents=True, exist_ok=True)
@@ -404,6 +460,7 @@ def main() -> int:
     print(
         f"Generating {args.count} torrents (seed={args.seed}, "
         f"size={format_bytes(size_min)}..{format_bytes(size_max)}, "
+        f"need≈{format_bytes(required)}, "
         f"trackers={args.tracker_count}, clients={clients}) → {args.out}",
         flush=True,
     )
