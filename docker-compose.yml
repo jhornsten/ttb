@@ -193,6 +193,22 @@ services:
       - swarm-state:/state
     restart: unless-stopped
 
+  flood-init:
+    profiles: ["flood"]
+    image: alpine:3.20
+    container_name: ttb-flood-init
+    volumes:
+      - rtorrent-config:/rtorrent-config
+      - rtorrent-downloads:/downloads
+      - rtorrent-socket:/run/rtorrent
+      - flood-config:/flood-config
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        mkdir -p /rtorrent-config/session /run/rtorrent /flood-config/.local/share/flood &&
+        chown -R ${PUID:-1000}:${PGID:-1000} /rtorrent-config /downloads /run/rtorrent /flood-config
+    restart: "no"
+
   rtorrent:
     profiles: ["flood"]
     image: jesec/rtorrent:latest
@@ -200,9 +216,14 @@ services:
     hostname: ttb-rtorrent
     user: "${PUID:-1000}:${PGID:-1000}"
     depends_on:
-      - catalog
-      - seeder
-      - ttb-tracker-0
+      catalog:
+        condition: service_started
+      seeder:
+        condition: service_started
+      ttb-tracker-0:
+        condition: service_started
+      flood-init:
+        condition: service_completed_successfully
     environment:
       HOME: /config
     volumes:
@@ -220,9 +241,12 @@ services:
       dockerfile: clients/flood/Dockerfile
     image: ttb-flood:${TAG:-local}
     container_name: ttb-flood-seed
+    user: "${PUID:-1000}:${PGID:-1000}"
     depends_on:
-      - catalog
-      - rtorrent
+      catalog:
+        condition: service_started
+      rtorrent:
+        condition: service_started
     environment:
       CATALOG_ROOT: /catalog
       TTB_CLIENT_ID: flood
@@ -248,14 +272,18 @@ services:
     environment:
       HOME: /config
     command:
+      - --auth
+      - none
       - --port
       - "3000"
       - --host
       - "0.0.0.0"
+      - --rundir
+      - /config/.local/share/flood
       - --allowedpath
       - /downloads
-      - --rtorrent
-      - "scgi:///run/rtorrent/rtorrent.sock"
+      - --rtsocket
+      - /run/rtorrent/rtorrent.sock
     ports:
       - "${FLOOD_PORT:-3000}:3000"
     volumes:

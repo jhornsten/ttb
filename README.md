@@ -34,7 +34,7 @@ First boot publishes the catalog volume, the seeder loads the **full** catalog, 
 | Transmission | http://127.0.0.1:9091 | `ttb` / `ttb` |
 | Deluge | http://127.0.0.1:8112 | password `ttb` |
 | qBittorrent | http://127.0.0.1:8080 | `ttb` / `ttb` |
-| Flood | http://127.0.0.1:3000 | create a local account on first visit |
+| Flood (rTorrent) | http://127.0.0.1:3000 | no login (preconfigured rTorrent socket) |
 
 Override host ports with `TRANSMISSION_PORT`, `DELUGE_WEB_PORT`, `QBITTORRENT_PORT`, `FLOOD_PORT` if something else is already bound (e.g. `QBITTORRENT_PORT=18080`).
 

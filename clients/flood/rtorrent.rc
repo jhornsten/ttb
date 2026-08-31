@@ -14,4 +14,4 @@ throttle.max_downloads.set = 100
 
 system.daemon.set = true
 network.scgi.open_local = /run/rtorrent/rtorrent.sock
-schedule2 = socket_chmod, 0, 0, "execute.nothrow = chmod, \"667\", /run/rtorrent/rtorrent.sock"
+schedule2 = socket_chmod, 0, 0, "execute.nothrow=chmod,667,/run/rtorrent/rtorrent.sock"
